@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 from src.models.vehicle import FuelType
 
@@ -25,5 +25,4 @@ class VehicleResponse(VehicleBase):
     company_id: int
     current_mileage: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

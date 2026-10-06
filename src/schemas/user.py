@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from src.models.user import UserRole
 
 # Схема того, що юзер відправляє при реєстрації
@@ -10,12 +10,11 @@ class UserRegisterRequest(BaseModel):
 # Схема того, що ми віддаємо назад (без пароля!)
 class UserResponse(BaseModel):
     id: int
-    company_id: int
     email: EmailStr
+    company_id: int
     role: UserRole
 
-    class Config:
-        from_attributes = True  # Дозволяє Pydantic читати дані з SQLAlchemy моделей
+    model_config = ConfigDict(from_attributes=True)
 
 # Схема для токена авторизації
 class TokenResponse(BaseModel):

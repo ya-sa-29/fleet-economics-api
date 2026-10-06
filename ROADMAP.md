@@ -45,7 +45,7 @@
 📍 Етап 4: Витрати та Фільтрація (Advanced Features)
 Мета: Зробити API зручним для аналізу даних.
 
-* [ ] Реалізувати CRUD для FuelLogs та MaintenanceLogs.
+* [x] Реалізувати CRUD для FuelLogs та MaintenanceLogs.
 
 * [ ] Додати пагінацію (limit, offset) для списків рейсів та автомобілів.
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -25,5 +25,4 @@ class FuelLogResponse(FuelLogBase):
     id: int
     company_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
