@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -52,3 +52,30 @@ def get_vehicles(
     ).offset(skip).limit(limit).all()
     
     return vehicles
+
+@router.patch("/{vehicle_id}/mileage", response_model=VehicleResponse)
+def update_vehicle_mileage(
+    vehicle_id: int,
+    current_mileage: int = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Шукаємо авто, перевіряючи, чи належить воно компанії юзера
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.id == vehicle_id,
+        Vehicle.company_id == current_user.company_id,
+        Vehicle.deleted_at == None
+    ).first()
+
+    if not vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Автомобіль не знайдено"
+        )
+
+    # Оновлюємо поле та зберігаємо зміни
+    vehicle.current_mileage = current_mileage
+    db.commit()
+    db.refresh(vehicle)
+    
+    return vehicle
