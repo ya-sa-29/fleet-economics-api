@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Literal
 
 from src.database import get_db
 from src.models.user import User, UserRole
@@ -52,19 +52,54 @@ def create_trip(
 
 @router.get("/", response_model=List[TripResponse])
 def get_trips(
-    skip: int = 0, 
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
+    sort_by: Literal[
+        "id",
+        "departure_time",
+        "created_at",
+        "distance_km",
+        "ticket_price",
+        "passengers_carried",
+        "status",
+    ] = "departure_time",
+    sort_order: Literal["asc", "desc"] = "desc",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Базовий запит для всіх
+    # Базовий запит: тільки активні рейси поточної компанії
     query = db.query(Trip).filter(
         Trip.company_id == current_user.company_id,
         Trip.deleted_at == None
     )
-    
-    # 🔴 Водій бачить ТІЛЬКИ свої рейси
+
+    # Водій бачить тільки власні рейси
     if current_user.role == UserRole.DRIVER:
         query = query.filter(Trip.driver_id == current_user.id)
-        
+
+    # Дозволені поля сортування
+    sort_columns = {
+        "id": Trip.id,
+        "departure_time": Trip.departure_time,
+        "created_at": Trip.created_at,
+        "distance_km": Trip.distance_km,
+        "ticket_price": Trip.ticket_price,
+        "passengers_carried": Trip.passengers_carried,
+        "status": Trip.status,
+    }
+
+    # Вибираємо колонку для сортування
+    sort_column = sort_columns[sort_by]
+
+    # Напрямок сортування
+    if sort_order == "asc":
+        query = query.order_by(sort_column.asc())
+    else:
+        query = query.order_by(sort_column.desc())
+
+    # Стабільний порядок для однакових значень
+    if sort_by != "id":
+        query = query.order_by(Trip.id.asc())
+
+    # Пагінація та отримання результатів
     return query.offset(skip).limit(limit).all()
