@@ -169,6 +169,68 @@ def test_sort_trips_by_passengers(client: TestClient, db: Session):
     assert [trip["passengers_carried"] for trip in trips] == [2, 5, 10]
 
 
+def test_sort_trips_with_equal_passengers(client: TestClient, db: Session):
+    headers = setup_trips(
+        client,
+        db,
+        email="equal-passengers-admin@transauto.com",
+    )
+
+    # Беремо рейси, які вже створив setup_trips.
+    trips = db.query(Trip).all()
+    assert len(trips) == 3
+
+    # Знаходимо рейс, у якого 5 пасажирів.
+    original_trip = next(
+        trip for trip in trips
+        if trip.passengers_carried == 5
+    )
+
+    # Створюємо ще один рейс із такою самою кількістю пасажирів.
+    duplicate_trip = Trip(
+        company_id=original_trip.company_id,
+        vehicle_id=original_trip.vehicle_id,
+        driver_id=original_trip.driver_id,
+        origin_id=original_trip.origin_id,
+        destination_id=original_trip.destination_id,
+        departure_time=original_trip.departure_time + timedelta(hours=1),
+        distance_km=original_trip.distance_km,
+        ticket_price=original_trip.ticket_price,
+        passengers_carried=5,
+        status=TripStatus.SCHEDULED,
+    )
+    db.add(duplicate_trip)
+    db.commit()
+    db.refresh(duplicate_trip)
+
+    # Очікуваний порядок ID для рейсів із 5 пасажирами.
+    expected_ids = sorted(
+        [original_trip.id, duplicate_trip.id]
+    )
+
+    response = client.get(
+        "/trips/?sort_by=passengers_carried&sort_order=asc",
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+
+    result = response.json()
+
+    # Кількість пасажирів має йти за зростанням.
+    assert [
+        trip["passengers_carried"] for trip in result
+    ] == [2, 5, 5, 10]
+
+    # Рейси з однаковою кількістю пасажирів мають іти за ID.
+    actual_ids = [
+        trip["id"] for trip in result
+        if trip["passengers_carried"] == 5
+    ]
+    assert actual_ids == expected_ids
+
+
+
 def test_trip_pagination(client: TestClient, db: Session):
     headers = setup_trips(
         client,
