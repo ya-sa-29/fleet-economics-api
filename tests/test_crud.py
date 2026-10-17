@@ -49,6 +49,8 @@ def test_create_and_get_vehicle(client):
     assert len(get_resp.json()) >= 1
     assert get_resp.json()[0]["license_plate"] == "KA1234XX"
 
+
+
 # --- Тест 2: Створення запису про заправку (Fuel Log) ---
 def test_create_fuel_log(client):
     headers = get_auth_headers(client)
@@ -90,3 +92,65 @@ def test_create_maintenance_log(client):
     maint_resp = client.post("/maintenance-logs/", json=maintenance_data, headers=headers)
     assert maint_resp.status_code == 201
     assert maint_resp.json()["type"] == "service"
+
+
+# --- Тест 4: Валідація пагінації автомобілів ---
+def test_vehicle_pagination_validation(client):
+    headers = get_auth_headers(client)
+
+    # Коректні параметри пагінації
+    valid_resp = client.get(
+        "/vehicles/?skip=0&limit=10",
+        headers=headers
+    )
+    assert valid_resp.status_code == 200
+
+    # skip не може бути від'ємним
+    negative_skip_resp = client.get(
+        "/vehicles/?skip=-1",
+        headers=headers
+    )
+    assert negative_skip_resp.status_code == 422
+
+    # limit повинен бути не менше 1
+    zero_limit_resp = client.get(
+        "/vehicles/?limit=0",
+        headers=headers
+    )
+    assert zero_limit_resp.status_code == 422
+
+    # limit не може перевищувати 100
+    excessive_limit_resp = client.get(
+        "/vehicles/?limit=101",
+        headers=headers
+    )
+    assert excessive_limit_resp.status_code == 422
+
+
+# --- Тест 5: Валідація пагінації заправок ---
+def test_fuel_logs_pagination_validation(client):
+    headers = get_auth_headers(client)
+
+    valid_resp = client.get(
+        "/fuel-logs/?skip=0&limit=10",
+        headers=headers
+    )
+    assert valid_resp.status_code == 200
+
+    negative_skip_resp = client.get(
+        "/fuel-logs/?skip=-1",
+        headers=headers
+    )
+    assert negative_skip_resp.status_code == 422
+
+    zero_limit_resp = client.get(
+        "/fuel-logs/?limit=0",
+        headers=headers
+    )
+    assert zero_limit_resp.status_code == 422
+
+    excessive_limit_resp = client.get(
+        "/fuel-logs/?limit=101",
+        headers=headers
+    )
+    assert excessive_limit_resp.status_code == 422

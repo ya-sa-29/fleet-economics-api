@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -46,11 +46,12 @@ def create_fuel_log(
 
 @router.get("/", response_model=List[FuelLogResponse])
 def get_fuel_logs(
-    skip: int = 0, 
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
     # Виводимо всі заправки компанії
     logs = db.query(FuelLog).filter(
         FuelLog.company_id == current_user.company_id
