@@ -23,11 +23,30 @@ class EconomicsService:
             amortization_cpm = float(vehicle.purchase_price - vehicle.residual_value) / vehicle.expected_life_km
 
         # 2. Пальне
-        latest_price = db.query(FuelPrice).filter(FuelPrice.fuel_type == vehicle.fuel_type).order_by(FuelPrice.parsed_at.desc()).first()
+        fuel_type_mapping = {
+            "petrol": "a-95",
+            "diesel": "diesel",
+            "gas": "gas",
+        }
+
+        fuel_price_type = fuel_type_mapping.get(vehicle.fuel_type.value)
+
+        latest_price = None
         fuel_cpm = 0.0
+
+        if fuel_price_type is not None:
+            latest_price = (
+                db.query(FuelPrice)
+                .filter(FuelPrice.fuel_type == fuel_price_type)
+                .order_by(FuelPrice.parsed_at.desc())
+                .first()
+            )
+
         if latest_price:
-            # Обгортаємо значення з БД у float, щоб позбутися типу Decimal
-            fuel_cpm = (float(vehicle.fuel_consumption) / 100) * float(latest_price.price_per_liter)
+            fuel_cpm = (
+                float(vehicle.fuel_consumption) / 100
+            ) * float(latest_price.price_per_liter)
+
 
         # 3. ТО та ремонти
         maintenance_logs = db.query(MaintenanceLog).filter(MaintenanceLog.vehicle_id == vehicle_id).all()

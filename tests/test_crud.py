@@ -1,24 +1,41 @@
 from datetime import datetime, timezone
 
 # --- Допоміжна функція для отримання токена ---
+
+from src.models.user import User
+from src.api.auth_utils import verify_password
+
+
 def get_auth_headers(client):
-    client.post(
+    register_resp = client.post(
         "/auth/register",
         json={
             "email": "admin@b2bfleet.com",
             "password": "supersecure",
-            "company_name": "Global Logistics"
-        }
+            "company_name": "Global Logistics",
+        },
     )
+    assert register_resp.status_code in (200, 201), (
+        f"Registration failed: {register_resp.status_code}, "
+        f"{register_resp.text}"
+    )
+
     login_resp = client.post(
         "/auth/login",
         data={
             "username": "admin@b2bfleet.com",
-            "password": "supersecure"
-        }
+            "password": "supersecure",
+        },
     )
+    assert login_resp.status_code == 200, (
+        f"Login failed: {login_resp.status_code}, "
+        f"{login_resp.text}"
+    )
+
     token = login_resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
 
 # --- Базовий payload для створення авто ---
 def get_base_vehicle_payload(plate: str):

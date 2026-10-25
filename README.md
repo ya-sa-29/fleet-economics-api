@@ -99,7 +99,7 @@ vs.
 | Migrations             | Alembic              |
 | Validation             | Pydantic             |
 | Authentication         | JWT                  |
-| Password hashing       | bcrypt / Argon2      |
+| Password hashing       | pwdlib / Argon2id    |
 | Testing                | pytest               |
 | API documentation      | OpenAPI / Swagger UI |
 | Deployment             | Render / Railway     |
@@ -359,6 +359,20 @@ Backend сам визначає, до якої компанії належить
 
 ---
 
+### Authentication & JWT
+
+Автентифікація користувачів реалізована за допомогою JSON Web Tokens (JWT).
+
+Після успішного входу API видає access token, який клієнт використовує для автентифікації наступних запитів. Токен містить дані, необхідні для ідентифікації користувача, та час закінчення дії (`exp`).
+
+- **Token format:** JWT
+- **Signing algorithm:** HS256
+- **Token lifetime:** 60 minutes by default
+- **Signing key:** `JWT_SECRET_KEY`, configured through application settings
+
+Захищені ендпоїнти використовують токен для ідентифікації користувача та, де передбачено, перевірки його ролі й доступу до ресурсів компанії.
+
+
 ## Cross-Entity Consistency
 
 При роботі з пов'язаними ресурсами система перевіряє належність до одного tenant'а.
@@ -523,63 +537,57 @@ GET /vehicles/12/economics?from=2026-09-01&to=2026-09-30
 
 ---
 
-# 🚀 Roadmap
+## 🚀 Roadmap
 
-* [x] **Етап 1 — Architecture**
+- [x] **Етап 1 — Architecture**
+  - [x] Проєктування предметної області
+  - [x] Проєктування ER-моделі
+  - [x] Визначення tenant isolation
+  - [x] Визначення ролей та RBAC
+  - [x] Ініціалізація SQLAlchemy
+  - [x] Початкові Alembic migrations
 
-  * [x] Проєктування предметної області
-  * [x] Проєктування ER-моделі
-  * [x] Визначення tenant isolation
-  * [x] Визначення ролей та RBAC
-  * [x] Ініціалізація SQLAlchemy
-  * [x] Початкові Alembic migrations
+- [x] **Етап 2 — Authentication & Authorization**
+  - [x] User registration
+  - [x] Password hashing
+  - [x] JWT authentication
+  - [x] RBAC
+  - [x] Tenant isolation
 
-* [x] **Етап 2 — Authentication & Authorization**
+- [x] **Етап 3 — Core CRUD**
+  - [x] Vehicles CRUD
+  - [x] Trips CRUD
+  - [x] Maintenance Logs CRUD
+  - [x] Locations
 
-  * [x] User registration
-  * [x] Password hashing
-  * [x] JWT authentication
-  * [x] RBAC
-  * [x] Tenant isolation
+- [x] **Етап 4 — Fuel & Query Features**
+  - [x] Fuel Logs
+  - [x] Pagination
+  - [x] Filtering
+  - [x] Sorting
 
-* [ ] **Етап 3 — Core CRUD**
+- [ ] **Етап 5 — Economics Engine**
+  - [x] EconomicsService / economics calculations
+  - [x] Cost per km
+  - [ ] Profit per km
+  - [x] Depreciation
+  - [ ] Load Factor
+  - [ ] CASK / RASK
 
-  * [x] Vehicles CRUD
-  * [x] Trips CRUD
-  * [x] Maintenance Logs CRUD
-  * [x] Locations
+- [ ] **Етап 6 — Quality & Security**
+  - [x] Automated tests with pytest *(реалізовані; є нестабільність bcrypt, яку потрібно усунути)*
+  - [ ] Structured logging
+  - [ ] Rate limiting
+  - [ ] Error handling
+  - [ ] Security review
 
-* [ ] **Етап 4 — Fuel & Query Features**
+- [ ] **Етап 7 — Production**
+  - [ ] PostgreSQL
+  - [ ] Docker
+  - [ ] GitHub Actions
+  - [ ] Production deployment
+  - [ ] Public API documentation
 
-  * [ ] Fuel Logs
-  * [ ] Pagination
-  * [ ] Filtering
-  * [ ] Sorting
-
-* [ ] **Етап 5 — Economics Engine**
-
-  * [ ] EconomicsService
-  * [ ] Cost per km
-  * [ ] Profit per km
-  * [ ] Depreciation
-  * [ ] Load Factor
-  * [ ] CASK / RASK
-
-* [ ] **Етап 6 — Quality & Security**
-
-  * [ ] Automated tests with pytest
-  * [ ] Structured logging
-  * [ ] Rate limiting
-  * [ ] Error handling
-  * [ ] Security review
-
-* [ ] **Етап 7 — Production**
-
-  * [ ] PostgreSQL
-  * [ ] Docker
-  * [ ] GitHub Actions
-  * [ ] Production deployment
-  * [ ] Public API documentation
 
 ---
 
@@ -684,18 +692,25 @@ http://127.0.0.1:8000/redoc
 
 The project uses `pytest` for automated testing.
 
-Planned test coverage includes:
+The current test suite covers:
 
-* user registration and authentication;
-* password hashing;
-* JWT validation;
-* RBAC;
-* tenant isolation;
-* CRUD operations;
-* validation errors;
-* ownership checks;
-* economics calculations;
-* prevention of cross-company data access.
+- user registration and authentication;
+- password hashing and verification;
+- CRUD operations;
+- pagination and query features;
+- vehicle economics calculations, including fuel cost, maintenance cost, and depreciation;
+- handling of requests for unknown vehicles.
+
+The current test suite contains 16 tests.
+
+Run tests with:
+
+```bash
+python -m pytest -q
+```
+
+Additional negative authentication tests, role-based access checks, and cross-company isolation tests are part of the ongoing security review.
+
 
 Run tests with:
 

@@ -1,6 +1,30 @@
-venv/
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+.venv_*/
+
+# Environment variables
 .env
-fleet.db
-test_fleet.db
+.env.*
+
+# Keep the example configuration
+!.env.example
+
+# Local databases and backups
+*.db
+*.db-*
+*.db.backup
+
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
