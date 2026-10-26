@@ -34,6 +34,7 @@ def create_vehicle(db, company_id, fuel_type, consumption, plate):
     return vehicle
 
 
+
 def test_calculate_vehicle_cpm_for_diesel(db):
     company = Company(name="Test Company")
     db.add(company)
@@ -76,17 +77,20 @@ def test_calculate_vehicle_cpm_for_diesel(db):
         company.id,
     )
 
-    # (150,000,000 - 30,000,000) / 500,000 = 240
-    assert result["amortization_cpm"] == 240.0
+    # Амортизація: (1,500,000 - 300,000) / 500,000 = 2.4 грн/км
+    assert result["amortization_cpm"] == 2.4
 
-    # 10 L / 100 km * 10,000 kopecks = 1,000 kopecks/km
-    assert result["fuel_cpm"] == 1_000.0
+    # Пальне: 10 л/100 км * 100 грн/л = 10 грн/км
+    assert result["fuel_cpm"] == 10.0
 
-    # 500,000 / 100,000 km = 5 kopecks/km
-    assert result["maintenance_cpm"] == 5.0
+    # ТО: 5,000 грн / 100,000 км = 0.05 грн/км
+    assert result["maintenance_cpm"] == 0.05
 
-    assert result["total_cpm"] == 1_245.0
-    assert result["market_fuel_price_used"] == 10_000
+    # Загальна собівартість: 2.4 + 10 + 0.05 = 12.45 грн/км
+    assert result["total_cpm"] == 12.45
+
+    # Ринкова ціна пального повертається у гривнях за літр
+    assert result["market_fuel_price_used"] == 100.0
 
 
 def test_calculate_vehicle_cpm_for_petrol_a95(db):
@@ -119,9 +123,12 @@ def test_calculate_vehicle_cpm_for_petrol_a95(db):
         company.id,
     )
 
-    # 20 L / 100 km * 8,915 kopecks = 1,783 kopecks/km
-    assert result["fuel_cpm"] == 1_783.0
-    assert result["market_fuel_price_used"] == 8_915
+    # Пальне: 20 л/100 км * 89.15 грн/л = 17.83 грн/км
+    assert result["fuel_cpm"] == 17.83
+
+    # 8,915 копійок = 89.15 гривні за літр
+    assert result["market_fuel_price_used"] == 89.15
+
 
 
 def test_calculate_vehicle_cpm_returns_404_for_unknown_vehicle(db):

@@ -1,28 +1,45 @@
-from sqlalchemy.orm import Session
+
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
 from src.models.vehicle import Vehicle
 from src.models.fuel_price import FuelPrice
-from src.models.maintenance_log import MaintenanceLog  # Додаємо імпорт моделі ТО
+from src.models.maintenance_log import MaintenanceLog
+
 
 class EconomicsService:
     @staticmethod
-    def calculate_vehicle_cpm(db: Session, vehicle_id: int, company_id: int):
-        # Шукаємо авто з урахуванням ID компанії для ізоляції даних
-        vehicle = db.query(Vehicle).filter(
-            Vehicle.id == vehicle_id, 
-            Vehicle.company_id == company_id
-        ).first()
-        
-        if not vehicle:
-            raise HTTPException(status_code=404, detail="Автомобіль не знайдено або не належить вашій компанії")
+    def _calculate_vehicle_cpm_raw(
+        db: Session,
+        vehicle_id: int,
+        company_id: int,
+    ):
+        vehicle = (
+            db.query(Vehicle)
+            .filter(
+                Vehicle.id == vehicle_id,
+                Vehicle.company_id == company_id,
+                Vehicle.deleted_at.is_(None),
+            )
+            .first()
+        )
 
-        # 1. Амортизація
+        if not vehicle:
+            raise HTTPException(
+                status_code=404,
+                detail="Автомобіль не знайдено або не належить вашій компанії",
+            )
+
+        # 1. Амортизація: копійки -> гривні, потім гривні/км.
         amortization_cpm = 0.0
         if vehicle.expected_life_km > 0:
-            # Примусово робимо float
-            amortization_cpm = float(vehicle.purchase_price - vehicle.residual_value) / vehicle.expected_life_km
+            amortization_cpm = (
+                float(vehicle.purchase_price - vehicle.residual_value)
+                / 100
+                / vehicle.expected_life_km
+            )
 
-        # 2. Пальне
+        # 2. Пальне.
         fuel_type_mapping = {
             "petrol": "a-95",
             "diesel": "diesel",
@@ -30,7 +47,6 @@ class EconomicsService:
         }
 
         fuel_price_type = fuel_type_mapping.get(vehicle.fuel_type.value)
-
         latest_price = None
         fuel_cpm = 0.0
 
@@ -44,28 +60,74 @@ class EconomicsService:
 
         if latest_price:
             fuel_cpm = (
-                float(vehicle.fuel_consumption) / 100
-            ) * float(latest_price.price_per_liter)
+                float(vehicle.fuel_consumption)
+                / 100
+                * (float(latest_price.price_per_liter) / 100)
+            )
 
+        # 3. ТО та ремонти: копійки -> гривні.
+        maintenance_logs = (
+            db.query(MaintenanceLog)
+            .filter(
+                MaintenanceLog.vehicle_id == vehicle_id,
+                MaintenanceLog.company_id == company_id,
+            )
+            .all()
+        )
 
-        # 3. ТО та ремонти
-        maintenance_logs = db.query(MaintenanceLog).filter(MaintenanceLog.vehicle_id == vehicle_id).all()
-        total_maintenance_cost = sum(log.cost for log in maintenance_logs)
-        
+        total_maintenance_cost = sum(
+            log.cost for log in maintenance_logs
+        )
+
         maintenance_cpm = 0.0
         if vehicle.current_mileage > 0:
-            # Примусово робимо float
-            maintenance_cpm = float(total_maintenance_cost) / vehicle.current_mileage
+            maintenance_cpm = (
+                float(total_maintenance_cost)
+                / 100
+                / vehicle.current_mileage
+            )
 
-        # Тепер тут додаються три однакові типи (float), і Python не сваритиметься
-        total_cpm = amortization_cpm + fuel_cpm + maintenance_cpm
+        total_cpm = (
+            amortization_cpm
+            + fuel_cpm
+            + maintenance_cpm
+        )
 
+        # Повертаємо точніші проміжні значення для подальших розрахунків.
         return {
             "vehicle_id": vehicle.id,
             "license_plate": vehicle.license_plate,
-            "amortization_cpm": round(amortization_cpm, 2),
-            "fuel_cpm": round(fuel_cpm, 2),
-            "maintenance_cpm": round(maintenance_cpm, 2),
-            "total_cpm": round(total_cpm, 2),
-            "market_fuel_price_used": latest_price.price_per_liter if latest_price else 0
+            "amortization_cpm": amortization_cpm,
+            "fuel_cpm": fuel_cpm,
+            "maintenance_cpm": maintenance_cpm,
+            "total_cpm": total_cpm,
+            "market_fuel_price_used": (
+                float(latest_price.price_per_liter)/100
+                if latest_price
+                else 0.0
+            ),
+        }
+
+    @staticmethod
+    def calculate_vehicle_cpm(
+        db: Session,
+        vehicle_id: int,
+        company_id: int,
+    ):
+        result = EconomicsService._calculate_vehicle_cpm_raw(
+            db=db,
+            vehicle_id=vehicle_id,
+            company_id=company_id,
+        )
+
+        # Зберігаємо формат відповіді наявного CPM endpoint.
+        return {
+            **result,
+            "amortization_cpm": round(result["amortization_cpm"], 2),
+            "fuel_cpm": round(result["fuel_cpm"], 2),
+            "maintenance_cpm": round(result["maintenance_cpm"], 2),
+            "total_cpm": round(result["total_cpm"], 2),
+            "market_fuel_price_used": round(
+                result["market_fuel_price_used"], 2
+            ),
         }
