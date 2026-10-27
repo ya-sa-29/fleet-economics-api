@@ -566,13 +566,13 @@ GET /vehicles/12/economics?from=2026-09-01&to=2026-09-30
   - [x] Filtering
   - [x] Sorting
 
-- [ ] **Етап 5 — Economics Engine**
+- [x] **Етап 5 — Economics Engine**
   - [x] EconomicsService / economics calculations
   - [x] Cost per km
-  - [ ] Profit per km
+  - [x] Profit per km
   - [x] Depreciation
-  - [ ] Load Factor
-  - [ ] CASK / RASK
+  - [x] Load Factor
+  - [x] CASK / RASK
 
 - [ ] **Етап 6 — Quality & Security**
   - [x] Automated tests with pytest *(реалізовані; є нестабільність bcrypt, яку потрібно усунути)*

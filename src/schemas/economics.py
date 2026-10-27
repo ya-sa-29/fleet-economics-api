@@ -11,3 +11,33 @@ class VehicleCPMResponse(BaseModel):
     maintenance_cpm: float
     
     market_fuel_price_used: int # Яку ринкову ціну ми взяли для розрахунку (копійки)
+
+class TripProfitResponse(BaseModel):
+    trip_id: int
+    vehicle_id: int
+    distance_km: int
+
+    revenue: float
+    estimated_costs: float
+    profit: float
+    profit_per_km: float
+    total_cpm: float
+
+
+class TripLoadFactorResponse(BaseModel):
+    trip_id: int
+    vehicle_id: int
+    passengers_carried: int
+    passenger_capacity: int
+    load_factor: float
+
+class TripCaskRaskResponse(BaseModel):
+    trip_id: int
+    vehicle_id: int
+    distance_km: float
+    passenger_capacity: int
+    available_seat_kilometers: float
+    estimated_costs: float
+    revenue: float
+    cask: float
+    rask: float
