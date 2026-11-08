@@ -1,4 +1,3 @@
-
 from datetime import datetime, timezone
 
 import pytest
@@ -232,6 +231,88 @@ def test_profit_per_km_http_driver_cannot_access_other_trip(
 
     response = client.get(
         f"/economics/trip/{other_trip.id}/profit-per-km",
+        headers=data["driver_headers"],
+    )
+
+    assert response.status_code == 404, response.text
+
+def test_vehicle_cpm_http_driver_can_access_assigned_vehicle(
+    client: TestClient,
+    db: Session,
+):
+    data = setup_economics_trip(client, db)
+
+    trip = db.query(Trip).filter(
+        Trip.id == data["trip_id"]
+    ).first()
+    assert trip is not None
+
+    response = client.get(
+        f"/economics/vehicle/{trip.vehicle_id}/cpm",
+        headers=data["driver_headers"],
+    )
+
+    assert response.status_code == 200, response.text
+
+    result = response.json()
+
+    assert result["vehicle_id"] == trip.vehicle_id
+    assert float(result["total_cpm"]) == 2.4
+
+def test_vehicle_cpm_http_driver_cannot_access_unassigned_vehicle(
+    client: TestClient,
+    db: Session,
+):
+    data = setup_economics_trip(client, db)
+
+    # Створюємо другий автомобіль, який не призначений водієві.
+    response = client.post(
+        "/vehicles/",
+        headers=data["admin_headers"],
+        json={
+            "brand": "Volkswagen",
+            "model": "Crafter",
+            "year": 2021,
+            "license_plate": "ECONTEST002",
+            "fuel_type": "diesel",
+            "fuel_consumption": 9.5,
+            "passenger_capacity": 16,
+            "purchase_price": 120000000,
+            "purchase_mileage": 0,
+            "expected_life_km": 500000,
+            "residual_value": 20000000,
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    vehicle_id = response.json()["id"]
+
+    response = client.get(
+        f"/economics/vehicle/{vehicle_id}/cpm",
+        headers=data["driver_headers"],
+    )
+
+    assert response.status_code == 404, response.text
+
+def test_vehicle_cpm_http_driver_cannot_access_deleted_assignment(
+    client: TestClient,
+    db: Session,
+):
+    data = setup_economics_trip(client, db)
+
+    trip = db.query(Trip).filter(
+        Trip.id == data["trip_id"]
+    ).first()
+    assert trip is not None
+
+    vehicle_id = trip.vehicle_id
+
+    # Видаляємо єдиний рейс, який призначав автомобіль водієві.
+    trip.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+
+    response = client.get(
+        f"/economics/vehicle/{vehicle_id}/cpm",
         headers=data["driver_headers"],
     )
 

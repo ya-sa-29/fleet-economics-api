@@ -984,3 +984,91 @@ def test_cask_rask_driver_can_access_own_trip(db):
     assert result["vehicle_id"] == vehicle.id
     assert result["cask"] == 0.13
     assert result["rask"] == 0.83
+
+def test_calculate_vehicle_cpm_allows_driver_for_assigned_vehicle(db):
+    company = Company(name="Driver CPM Company")
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
+    vehicle = create_vehicle(
+        db,
+        company.id,
+        FuelType.DIESEL,
+        10,
+        "CPMDRIVER001",
+    )
+
+    create_trip(
+        db,
+        company.id,
+        vehicle.id,
+        driver_id=101,
+    )
+
+    result = EconomicsService.calculate_vehicle_cpm(
+        db,
+        vehicle_id=vehicle.id,
+        company_id=company.id,
+        driver_id=101,
+    )
+
+    assert result["total_cpm"] == 2.4
+
+
+def test_calculate_vehicle_cpm_denies_driver_for_unassigned_vehicle(db):
+    company = Company(name="Unassigned CPM Company")
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
+    vehicle = create_vehicle(
+        db,
+        company.id,
+        FuelType.DIESEL,
+        10,
+        "CPMDRIVER002",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        EconomicsService.calculate_vehicle_cpm(
+            db,
+            vehicle_id=vehicle.id,
+            company_id=company.id,
+            driver_id=101,
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+def test_calculate_vehicle_cpm_denies_driver_for_deleted_assignment(db):
+    company = Company(name="Deleted Assignment CPM Company")
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
+    vehicle = create_vehicle(
+        db,
+        company.id,
+        FuelType.DIESEL,
+        10,
+        "CPMDRIVER003",
+    )
+
+    create_trip(
+        db,
+        company.id,
+        vehicle.id,
+        driver_id=101,
+        deleted_at=datetime.now(timezone.utc),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        EconomicsService.calculate_vehicle_cpm(
+            db,
+            vehicle_id=vehicle.id,
+            company_id=company.id,
+            driver_id=101,
+        )
+
+    assert exc_info.value.status_code == 404

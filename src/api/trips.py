@@ -37,12 +37,20 @@ def create_trip(
     driver = db.query(User).filter(
         User.id == trip_in.driver_id,
         User.company_id == current_user.company_id,
-        User.role == UserRole.DRIVER,  # 🟠 Диспетчера не можна призначити за кермо
-        User.deleted_at == None
+        User.deleted_at == None,
     ).first()
 
-    if not driver:
-        raise HTTPException(status_code=404, detail="Водія не знайдено у вашій компанії")
+    if not driver or (
+        driver.role != UserRole.DRIVER
+        and not (
+            current_user.role == UserRole.ADMIN
+            and driver.id == current_user.id
+        )
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Водія не знайдено у вашій компанії"
+        )
 
     new_trip = Trip(**trip_in.model_dump(), company_id=current_user.company_id)
     db.add(new_trip)

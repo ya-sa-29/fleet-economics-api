@@ -13,14 +13,21 @@ router = APIRouter(prefix="/economics", tags=["Economics Engine"])
 @router.get("/vehicle/{vehicle_id}/cpm", response_model=VehicleCPMResponse)
 def get_vehicle_cpm(
     vehicle_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    """
-    Повертає фінансову аналітику по конкретному автомобілю: 
-    вартість 1 кілометра пробігу (Cost Per Kilometer).
-    """
-    return EconomicsService.calculate_vehicle_cpm(db, vehicle_id, current_user.company_id)
+    driver_id = (
+        current_user.id
+        if current_user.role == UserRole.DRIVER
+        else None
+    )
+
+    return EconomicsService.calculate_vehicle_cpm(
+        db=db,
+        vehicle_id=vehicle_id,
+        company_id=current_user.company_id,
+        driver_id=driver_id,
+    )
 
 @router.get(
     "/trip/{trip_id}/profit-per-km",

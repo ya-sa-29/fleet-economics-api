@@ -575,7 +575,7 @@ GET /vehicles/12/economics?from=2026-09-01&to=2026-09-30
   - [x] CASK / RASK
 
 - [ ] **Етап 6 — Quality & Security**
-  - [x] Automated tests with pytest *(реалізовані; є нестабільність bcrypt, яку потрібно усунути)*
+  - [x] Automated tests with pytest 
   - [ ] Structured logging
   - [ ] Rate limiting
   - [ ] Error handling

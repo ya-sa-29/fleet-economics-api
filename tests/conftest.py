@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from src.models.location import Location
 from src.main import app
 from src.database import get_db
 from src.models.base import Base
@@ -33,6 +34,19 @@ def db():
         db_session.close()
         Base.metadata.drop_all(bind=engine)
 
+@pytest.fixture
+def test_locations(db):
+    from src.models.location import Location
+
+    locations = [
+        Location(name="Київ", slug="kyiv"),
+        Location(name="Черкаси", slug="cherkasy"),
+    ]
+
+    db.add_all(locations)
+    db.commit()
+
+    return locations
 
 @pytest.fixture(scope="function")
 def client(db):

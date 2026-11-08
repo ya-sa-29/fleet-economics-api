@@ -113,14 +113,30 @@ class EconomicsService:
         db: Session,
         vehicle_id: int,
         company_id: int,
+        driver_id: int | None = None,
     ):
+        # Водій має доступ до CPM лише автомобіля,
+        # який призначений йому хоча б в одному активному рейсі.
+        if driver_id is not None:
+            assigned_trip = db.query(Trip.id).filter(
+                Trip.vehicle_id == vehicle_id,
+                Trip.driver_id == driver_id,
+                Trip.company_id == company_id,
+                Trip.deleted_at.is_(None),
+            ).first()
+
+            if not assigned_trip:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Автомобіль не знайдено або немає доступу до нього",
+                )
+
         result = EconomicsService._calculate_vehicle_cpm_raw(
             db=db,
             vehicle_id=vehicle_id,
             company_id=company_id,
         )
 
-        # Зберігаємо формат відповіді наявного CPM endpoint.
         return {
             **result,
             "amortization_cpm": round(result["amortization_cpm"], 2),

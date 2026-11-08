@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-
+from src.models.vehicle import Vehicle
 from src.models.location import Location
 from src.models.trip import Trip, TripStatus
 from src.models.user import User, UserRole
@@ -277,3 +277,355 @@ def test_trip_query_validation(client: TestClient, db: Session):
         assert response.status_code == 422, (
             f"Query {query} returned {response.status_code}: {response.text}"
         )
+
+def test_create_trip_success(client: TestClient, db: Session):
+    headers = setup_trips(
+        client,
+        db,
+        email="create-trip-admin@transauto.com",
+    )
+
+    driver = db.query(User).filter(
+        User.email == "driver-create-trip-admin@transauto.com"
+    ).first()
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    assert vehicle is not None
+
+    response = client.post(
+        "/trips/",
+        headers=headers,
+        json={
+            "vehicle_id": vehicle.id,
+            "driver_id": driver.id,
+            "origin_id": db.query(Location).filter(
+                Location.slug == "kyiv"
+            ).first().id,
+            "destination_id": db.query(Location).filter(
+                Location.slug == "cherkasy"
+            ).first().id,
+            "departure_time": datetime.now(timezone.utc).isoformat(),
+            "distance_km": 150,
+            "ticket_price": 25000,
+            "passengers_carried": 5,
+            "status": "scheduled",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+
+    data = response.json()
+
+    assert data["vehicle_id"] == vehicle.id
+    assert data["driver_id"] == driver.id
+    assert data["distance_km"] == 150
+    assert data["ticket_price"] == 25000
+    assert data["passengers_carried"] == 5
+    assert data["status"] == "scheduled"
+
+def test_create_trip_vehicle_not_found(client: TestClient, db: Session):
+    headers = setup_trips(
+        client,
+        db,
+        email="missing-vehicle-admin@transauto.com",
+    )
+
+    driver = db.query(User).filter(
+        User.email == "driver-missing-vehicle-admin@transauto.com"
+    ).first()
+
+    origin = db.query(Location).filter(
+        Location.slug == "kyiv"
+    ).first()
+
+    destination = db.query(Location).filter(
+        Location.slug == "cherkasy"
+    ).first()
+
+    response = client.post(
+        "/trips/",
+        headers=headers,
+        json={
+            "vehicle_id": 99999,
+            "driver_id": driver.id,
+            "origin_id": origin.id,
+            "destination_id": destination.id,
+            "departure_time": datetime.now(timezone.utc).isoformat(),
+            "distance_km": 150,
+            "ticket_price": 25000,
+            "passengers_carried": 5,
+            "status": "scheduled",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Автомобіль не знайдено"
+
+def test_create_trip_exceeds_vehicle_capacity(client: TestClient, db: Session):
+    headers = setup_trips(
+        client,
+        db,
+        email="capacity-admin@transauto.com",
+    )
+
+    driver = db.query(User).filter(
+        User.email == "driver-capacity-admin@transauto.com"
+    ).first()
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    origin = db.query(Location).filter(
+        Location.slug == "kyiv"
+    ).first()
+
+    destination = db.query(Location).filter(
+        Location.slug == "cherkasy"
+    ).first()
+
+    response = client.post(
+        "/trips/",
+        headers=headers,
+        json={
+            "vehicle_id": vehicle.id,
+            "driver_id": driver.id,
+            "origin_id": origin.id,
+            "destination_id": destination.id,
+            "departure_time": datetime.now(timezone.utc).isoformat(),
+            "distance_km": 150,
+            "ticket_price": 25000,
+            "passengers_carried": 19,
+            "status": "scheduled",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Кількість пасажирів (19) перевищує місткість авто (18)"
+    )
+
+def test_create_trip_admin_can_assign_self(client: TestClient, db: Session):
+    headers = setup_trips(
+        client,
+        db,
+        email="admin-driver@transauto.com",
+    )
+
+    admin = db.query(User).filter(
+        User.email == "admin-driver@transauto.com"
+    ).first()
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    origin = db.query(Location).filter(
+        Location.slug == "kyiv"
+    ).first()
+
+    destination = db.query(Location).filter(
+        Location.slug == "cherkasy"
+    ).first()
+
+    response = client.post(
+        "/trips/",
+        headers=headers,
+        json={
+            "vehicle_id": vehicle.id,
+            "driver_id": admin.id,
+            "origin_id": origin.id,
+            "destination_id": destination.id,
+            "departure_time": datetime.now(timezone.utc).isoformat(),
+            "distance_km": 150,
+            "ticket_price": 25000,
+            "passengers_carried": 5,
+            "status": "scheduled",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["driver_id"] == admin.id
+    assert data["company_id"] == admin.company_id
+
+def test_create_trip_dispatcher_cannot_assign_self(client: TestClient, db: Session):
+    headers = setup_trips(
+        client,
+        db,
+        email="dispatcher-driver@transauto.com",
+    )
+
+    dispatcher = db.query(User).filter(
+        User.email == "dispatcher-driver@transauto.com"
+    ).first()
+
+    dispatcher.role = UserRole.DISPATCHER
+    db.commit()
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    origin = db.query(Location).filter(
+        Location.slug == "kyiv"
+    ).first()
+
+    destination = db.query(Location).filter(
+        Location.slug == "cherkasy"
+    ).first()
+
+    response = client.post(
+        "/trips/",
+        headers=headers,
+        json={
+            "vehicle_id": vehicle.id,
+            "driver_id": dispatcher.id,
+            "origin_id": origin.id,
+            "destination_id": destination.id,
+            "departure_time": datetime.now(timezone.utc).isoformat(),
+            "distance_km": 150,
+            "ticket_price": 25000,
+            "passengers_carried": 5,
+            "status": "scheduled",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Водія не знайдено у вашій компанії"
+
+
+def create_trip_for_another_driver(db, admin_email):
+    admin = db.query(User).filter(
+        User.email == admin_email
+    ).first()
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    origin = db.query(Location).filter(
+        Location.slug == "kyiv"
+    ).first()
+
+    destination = db.query(Location).filter(
+        Location.slug == "cherkasy"
+    ).first()
+
+    other_driver = User(
+        company_id=admin.company_id,
+        email=f"other-driver-{admin_email}",
+        hashed_password=get_password_hash("driver-password"),
+        role=UserRole.DRIVER,
+    )
+    db.add(other_driver)
+    db.commit()
+    db.refresh(other_driver)
+
+    trip = Trip(
+        company_id=admin.company_id,
+        vehicle_id=vehicle.id,
+        driver_id=other_driver.id,
+        origin_id=origin.id,
+        destination_id=destination.id,
+        departure_time=datetime.now(timezone.utc),
+        distance_km=180,
+        ticket_price=30000,
+        passengers_carried=8,
+        status=TripStatus.SCHEDULED,
+    )
+
+    db.add(trip)
+    db.commit()
+    db.refresh(trip)
+
+    return trip
+
+
+def test_driver_sees_only_own_trips(client: TestClient, db: Session):
+    admin_email = "driver-isolation@transauto.com"
+    setup_trips(client, db, email=admin_email)
+
+    driver = db.query(User).filter(
+        User.email == f"driver-{admin_email}"
+    ).first()
+
+    driver_login = client.post(
+        "/auth/login",
+        data={
+            "username": driver.email,
+            "password": "driver-password",
+        },
+    )
+    assert driver_login.status_code == 200, driver_login.text
+
+    driver_headers = {
+        "Authorization": f"Bearer {driver_login.json()['access_token']}"
+    }
+
+    other_trip = create_trip_for_another_driver(db, admin_email)
+
+    response = client.get(
+        "/trips/",
+        headers=driver_headers,
+    )
+
+    assert response.status_code == 200, response.text
+
+    trips = response.json()
+
+    # Водій бачить три власні рейси, але не чужий четвертий.
+    assert len(trips) == 3
+    assert all(trip["driver_id"] == driver.id for trip in trips)
+    assert all(trip["id"] != other_trip.id for trip in trips)
+
+
+def test_admin_sees_all_company_trips(client: TestClient, db: Session):
+    admin_email = "admin-all-trips@transauto.com"
+    admin_headers = setup_trips(client, db, email=admin_email)
+
+    other_trip = create_trip_for_another_driver(db, admin_email)
+
+    response = client.get(
+        "/trips/",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.text
+
+    trips = response.json()
+
+    assert len(trips) == 4
+    assert any(trip["id"] == other_trip.id for trip in trips)
+
+
+def test_dispatcher_sees_all_company_trips(
+    client: TestClient, db: Session
+):
+    admin_email = "dispatcher-all-trips@transauto.com"
+    admin_headers = setup_trips(client, db, email=admin_email)
+
+    admin = db.query(User).filter(
+        User.email == admin_email
+    ).first()
+
+    # Для цього тесту змінюємо роль адміністратора на диспетчера.
+    admin.role = UserRole.DISPATCHER
+    db.commit()
+
+    other_trip = create_trip_for_another_driver(db, admin_email)
+
+    response = client.get(
+        "/trips/",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.text
+
+    trips = response.json()
+
+    assert len(trips) == 4
+    assert any(trip["id"] == other_trip.id for trip in trips)

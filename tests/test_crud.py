@@ -1,39 +1,88 @@
 from datetime import datetime, timezone
 
-# --- Допоміжна функція для отримання токена ---
+from src.models.user import User, UserRole
+from src.models.trip import Trip, TripStatus
+from src.models.vehicle import Vehicle
+from src.models.location import Location
 
-from src.models.user import User
-from src.api.auth_utils import verify_password
-
-
-def get_auth_headers(client):
+def get_auth_headers(client, email="test@transauto.com", password="password123"):
     register_resp = client.post(
         "/auth/register",
         json={
-            "email": "admin@b2bfleet.com",
-            "password": "supersecure",
-            "company_name": "Global Logistics",
+            "email": email,
+            "password": password,
+            "company_name": "Test Company",
         },
     )
-    assert register_resp.status_code in (200, 201), (
-        f"Registration failed: {register_resp.status_code}, "
-        f"{register_resp.text}"
-    )
+    assert register_resp.status_code in (200, 201), register_resp.text
 
     login_resp = client.post(
         "/auth/login",
         data={
-            "username": "admin@b2bfleet.com",
-            "password": "supersecure",
+            "username": email,
+            "password": password,
         },
     )
-    assert login_resp.status_code == 200, (
-        f"Login failed: {login_resp.status_code}, "
-        f"{login_resp.text}"
-    )
+    assert login_resp.status_code == 200, login_resp.text
 
     token = login_resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+def test_driver_sees_only_assigned_vehicles(client, db, test_locations):
+    headers = setup_trips(
+        client,
+        db,
+        email="vehicle-driver@transauto.com",
+    )
+
+    # Створюємо другий автомобіль, не призначений водієві
+    unassigned_vehicle = client.post(
+        "/vehicles/",
+        json=get_base_vehicle_payload("TRIPTEST002"),
+        headers=headers,
+    )
+    assert unassigned_vehicle.status_code == 201, unassigned_vehicle.text
+
+    driver = db.query(User).filter(
+        User.email == "vehicle-driver@transauto.com"
+    ).first()
+
+    driver.role = UserRole.DRIVER
+    db.commit()
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    origin = db.query(Location).filter(
+        Location.slug == "kyiv"
+    ).first()
+
+    destination = db.query(Location).filter(
+        Location.slug == "cherkasy"
+    ).first()
+
+    # Призначаємо перший автомобіль водієві через рейс
+    trip = Trip(
+        company_id=driver.company_id,
+        vehicle_id=vehicle.id,
+        driver_id=driver.id,
+        origin_id=origin.id,
+        destination_id=destination.id,
+        departure_time=datetime.now(timezone.utc),
+        distance_km=150,
+        ticket_price=25000,
+        passengers_carried=5,
+        status=TripStatus.SCHEDULED,
+    )
+    db.add(trip)
+    db.commit()
+
+    response = client.get("/vehicles/", headers=headers)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["id"] == vehicle.id
 
 
 
@@ -171,3 +220,139 @@ def test_fuel_logs_pagination_validation(client):
         headers=headers
     )
     assert excessive_limit_resp.status_code == 422
+
+def setup_trips(client, db, email):
+    register_resp = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": "supersecure",
+            "company_name": "Global Logistics",
+        },
+    )
+    assert register_resp.status_code in (200, 201), register_resp.text
+
+    login_resp = client.post(
+        "/auth/login",
+        data={
+            "username": email,
+            "password": "supersecure",
+        },
+    )
+    assert login_resp.status_code == 200, login_resp.text
+
+    headers = {
+        "Authorization": f"Bearer {login_resp.json()['access_token']}"
+    }
+
+    vehicle_resp = client.post(
+        "/vehicles/",
+        json=get_base_vehicle_payload("TRIPTEST001"),
+        headers=headers,
+    )
+    assert vehicle_resp.status_code == 201, vehicle_resp.text
+
+    return headers
+
+def test_driver_can_update_assigned_vehicle_mileage(client, db, test_locations):
+    headers = setup_trips(
+        client,
+        db,
+        email="mileage-driver@transauto.com",
+    )
+
+    driver = db.query(User).filter(
+        User.email == "mileage-driver@transauto.com"
+    ).first()
+
+    driver.role = UserRole.DRIVER
+    db.commit()
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    origin = db.query(Location).filter(
+        Location.slug == "kyiv"
+    ).first()
+
+    destination = db.query(Location).filter(
+        Location.slug == "cherkasy"
+    ).first()
+
+    trip = Trip(
+        company_id=driver.company_id,
+        vehicle_id=vehicle.id,
+        driver_id=driver.id,
+        origin_id=origin.id,
+        destination_id=destination.id,
+        departure_time=datetime.now(timezone.utc),
+        distance_km=150,
+        ticket_price=25000,
+        passengers_carried=5,
+        status=TripStatus.SCHEDULED,
+    )
+    db.add(trip)
+    db.commit()
+
+    new_mileage = vehicle.current_mileage + 100
+
+    response = client.patch(
+        f"/vehicles/{vehicle.id}/mileage",
+        headers=headers,
+        json={"current_mileage": new_mileage},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["current_mileage"] == new_mileage
+
+
+def test_driver_cannot_update_unassigned_vehicle_mileage(client, db):
+    headers = setup_trips(
+        client,
+        db,
+        email="unauthorized-driver@transauto.com",
+    )
+
+    driver = db.query(User).filter(
+        User.email == "unauthorized-driver@transauto.com"
+    ).first()
+
+    driver.role = UserRole.DRIVER
+    db.commit()
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    response = client.patch(
+        f"/vehicles/{vehicle.id}/mileage",
+        headers=headers,
+        json={"current_mileage": vehicle.current_mileage + 100},
+    )
+
+    assert response.status_code == 403
+
+
+def test_vehicle_mileage_cannot_decrease(client, db):
+    headers = setup_trips(
+        client,
+        db,
+        email="mileage-admin@transauto.com",
+    )
+
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.license_plate == "TRIPTEST001"
+    ).first()
+
+    vehicle.current_mileage = 100000
+    db.commit()
+
+    response = client.patch(
+        f"/vehicles/{vehicle.id}/mileage",
+        headers=headers,
+        json={"current_mileage": 90000},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Новий пробіг не може бути меншим за поточний"

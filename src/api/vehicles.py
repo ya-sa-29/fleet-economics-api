@@ -3,12 +3,11 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from src.database import get_db
-from src.models.user import User
+from src.models.user import User, UserRole
 from src.models.vehicle import Vehicle
+from src.models.trip import Trip
 from src.schemas.vehicle import VehicleCreate, VehicleResponse
-from src.api.dependencies import get_current_user
 from src.api.dependencies import get_current_user, require_roles
-from src.models.user import UserRole
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
@@ -45,22 +44,31 @@ def get_vehicles(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Юзер отримує ТІЛЬКИ автомобілі своєї компанії
-    vehicles = db.query(Vehicle).filter(
+    query = db.query(Vehicle).filter(
         Vehicle.company_id == current_user.company_id,
         Vehicle.deleted_at == None
-    ).offset(skip).limit(limit).all()
-    
-    return vehicles
+    )
+
+    # Водій бачить лише автомобілі, на яких виконував або має виконувати свої рейси
+    if current_user.role == UserRole.DRIVER:
+        query = query.join(
+            Trip,
+            Trip.vehicle_id == Vehicle.id
+        ).filter(
+            Trip.driver_id == current_user.id,
+            Trip.company_id == current_user.company_id,
+            Trip.deleted_at == None
+        ).distinct()
+
+    return query.offset(skip).limit(limit).all()
 
 @router.patch("/{vehicle_id}/mileage", response_model=VehicleResponse)
 def update_vehicle_mileage(
     vehicle_id: int,
-    current_mileage: int = Body(..., embed=True),
+    current_mileage: int = Body(..., embed=True, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Шукаємо авто, перевіряючи, чи належить воно компанії юзера
     vehicle = db.query(Vehicle).filter(
         Vehicle.id == vehicle_id,
         Vehicle.company_id == current_user.company_id,
@@ -69,13 +77,34 @@ def update_vehicle_mileage(
 
     if not vehicle:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Автомобіль не знайдено"
         )
 
-    # Оновлюємо поле та зберігаємо зміни
+    # Водій може змінювати пробіг лише автомобіля зі своїх рейсів
+    if current_user.role == UserRole.DRIVER:
+        assigned_trip = db.query(Trip).filter(
+            Trip.vehicle_id == vehicle.id,
+            Trip.driver_id == current_user.id,
+            Trip.company_id == current_user.company_id,
+            Trip.deleted_at == None
+        ).first()
+
+        if not assigned_trip:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ви не маєте права змінювати пробіг цього автомобіля"
+            )
+
+    # Пробіг не повинен зменшуватися
+    if current_mileage < vehicle.current_mileage:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Новий пробіг не може бути меншим за поточний"
+        )
+
     vehicle.current_mileage = current_mileage
     db.commit()
     db.refresh(vehicle)
-    
+
     return vehicle
