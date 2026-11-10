@@ -1,9 +1,9 @@
 from fastapi import FastAPI
-from src.api import auth, vehicles, trips, fuel_logs, maintenance_logs, fuel_prices, economics, users
+from src.api import auth, vehicles, trips, fuel_logs, maintenance_logs, fuel_prices, economics, users, locations
 
 
 app = FastAPI(
-    title="B2B Fleet Economics API",
+    title="Fleet Economics API",
     description="API для управління автопарком мікроперевізників та розрахунку економіки.",
     version="1.0.0"
 )
@@ -16,6 +16,7 @@ app.include_router(maintenance_logs.router)
 app.include_router(economics.router)
 app.include_router(fuel_prices.router)
 app.include_router(users.router)
+app.include_router(locations.router)
 
 @app.get("/health", tags=["System"])
 def health_check():
