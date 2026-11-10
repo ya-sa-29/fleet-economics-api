@@ -1,3 +1,4 @@
+
 from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 
@@ -10,6 +11,48 @@ from src.models.maintenance_log import MaintenanceLog, MaintenanceType
 from src.models.vehicle import FuelType, Vehicle
 from src.services.economics import EconomicsService
 from src.models.trip import Trip
+from src.models.user import User, UserRole
+from src.models.location import Location
+from src.api.auth_utils import get_password_hash
+
+
+@pytest.fixture(autouse=True)
+def default_companies(db):
+    """Базові компанії для тестів, які використовують ID 1 та 2."""
+    db.add_all([
+        Company(id=1, name="Default Test Company"),
+        Company(id=2, name="Second Test Company"),
+    ])
+    db.commit()
+
+
+def create_company(db, name="Test Company"):
+    company = Company(name=name)
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+def create_user(
+    db,
+    company_id,
+    email="driver@example.com",
+    role=UserRole.DRIVER,
+    user_id=None,
+):
+    user = User(
+        id=user_id,
+        company_id=company_id,
+        email=email,
+        hashed_password=get_password_hash("password123"),
+        role=role,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
 
 def create_vehicle(db, company_id, fuel_type, consumption, plate):
     vehicle = Vehicle(
@@ -33,25 +76,67 @@ def create_vehicle(db, company_id, fuel_type, consumption, plate):
     return vehicle
 
 
-
 def create_trip(
     db,
     company_id,
     vehicle_id,
-    driver_id=101,
+    driver_id=None,
     distance_km=100,
     ticket_price=50_000,
     passengers_carried=4,
     deleted_at=None,
 ):
+    if driver_id is None:
+        driver = create_user(
+            db,
+            company_id,
+            email="default_driver@example.com",
+        )
+        driver_id = driver.id
+    else:
+        driver = db.query(User).filter(
+            User.id == driver_id,
+            User.company_id == company_id,
+        ).first()
+
+        if driver is None:
+            create_user(
+                db,
+                company_id,
+                email=f"driver{driver_id}@example.com",
+                user_id=driver_id,
+            )
+
+    # Локації створюються лише тоді, коли їх ще немає.
+    locations = [
+        ("Київ", "kyiv"),
+        ("Черкаси", "cherkasy"),
+    ]
+
+    location_ids = []
+
+    for name, slug in locations:
+        location = db.query(Location).filter(
+            Location.slug == slug
+        ).first()
+
+        if location is None:
+            location = Location(name=name, slug=slug)
+            db.add(location)
+            db.flush()
+
+        location_ids.append(location.id)
+
+    db.commit()
+
     departure_time = datetime(2026, 10, 20, tzinfo=timezone.utc)
 
     trip = Trip(
         company_id=company_id,
         vehicle_id=vehicle_id,
         driver_id=driver_id,
-        origin_id=1,
-        destination_id=2,
+        origin_id=location_ids[0],
+        destination_id=location_ids[1],
         departure_time=departure_time,
         arrival_time=departure_time + timedelta(hours=4),
         distance_km=distance_km,
@@ -59,13 +144,11 @@ def create_trip(
         passengers_carried=passengers_carried,
         deleted_at=deleted_at,
     )
+
     db.add(trip)
     db.commit()
     db.refresh(trip)
     return trip
-
-
-
 
 
 def test_calculate_vehicle_cpm_for_diesel(db):

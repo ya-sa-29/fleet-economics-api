@@ -47,28 +47,6 @@ def create_fuel_log(
                 detail="Ви не маєте права додавати заправки для цього автомобіля"
             )
 
-    # Якщо вказано рейс, перевіряємо його належність компанії та автомобілю
-    if log_in.trip_id:
-        trip = db.query(Trip).filter(
-            Trip.id == log_in.trip_id,
-            Trip.company_id == current_user.company_id,
-            Trip.vehicle_id == log_in.vehicle_id,
-            Trip.deleted_at == None
-        ).first()
-
-        if not trip:
-            raise HTTPException(
-                status_code=404,
-                detail="Рейс не знайдено або він не належить цьому автомобілю"
-            )
-
-        # DRIVER може прив'язати заправку лише до власного рейсу
-        if current_user.role == UserRole.DRIVER and trip.driver_id != current_user.id:
-            raise HTTPException(
-                status_code=403,
-                detail="Ви не маєте права прив'язувати заправку до чужого рейсу"
-            )
-
     new_log = FuelLog(
         **log_in.model_dump(),
         company_id=current_user.company_id

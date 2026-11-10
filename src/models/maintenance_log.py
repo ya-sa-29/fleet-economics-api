@@ -1,5 +1,13 @@
 import enum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    Enum,
+    ForeignKeyConstraint,
+)
 from sqlalchemy.sql import func
 from src.models.base import Base
 
@@ -12,9 +20,17 @@ class MaintenanceType(str, enum.Enum):
 class MaintenanceLog(Base):
     __tablename__ = "maintenance_logs"
 
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["vehicle_id", "company_id"],
+            ["vehicles.id", "vehicles.company_id"],
+            name="fk_maintenance_logs_vehicle_company",
+        ),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=False, index=True)
+    vehicle_id = Column(Integer, nullable=False, index=True)
 
     type = Column(Enum(MaintenanceType), nullable=False)
     description = Column(String, nullable=False)

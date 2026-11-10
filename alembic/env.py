@@ -4,7 +4,7 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-
+from sqlalchemy import event
 import sys
 import os
 from dotenv import load_dotenv
@@ -93,6 +93,14 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+
+    # Увімкнення перевірки FK для SQLite під час міграцій
+    if connectable.dialect.name == "sqlite":
+        @event.listens_for(connectable, "connect")
+        def enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
     with connectable.connect() as connection:
         context.configure(

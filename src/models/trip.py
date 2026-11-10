@@ -1,10 +1,14 @@
-
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, Integer, DateTime, ForeignKey
+from sqlalchemy import (
+    Column,
+    Integer,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+)
 from sqlalchemy.sql import func
-
 from src.models.base import Base
 
 
@@ -18,10 +22,23 @@ class TripStatus(str, enum.Enum):
 class Trip(Base):
     __tablename__ = "trips"
 
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["vehicle_id", "company_id"],
+            ["vehicles.id", "vehicles.company_id"],
+            name="fk_trips_vehicle_company",
+        ),
+        ForeignKeyConstraint(
+            ["driver_id", "company_id"],
+            ["users.id", "users.company_id"],
+            name="fk_trips_driver_company",
+        ),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=False, index=True)
-    driver_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    vehicle_id = Column(Integer, nullable=False, index=True)
+    driver_id = Column(Integer, nullable=False, index=True)
 
     origin_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
     destination_id = Column(Integer, ForeignKey("locations.id"), nullable=False)

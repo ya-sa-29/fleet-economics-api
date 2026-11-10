@@ -1,15 +1,22 @@
 import enum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.sql import func
 from src.models.base import Base
+from sqlalchemy import Index
+
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
     DISPATCHER = "dispatcher"
     DRIVER = "driver"
 
+
 class User(Base):
     __tablename__ = "users"
+
+    __table_args__ = (
+        Index("uq_users_id_company", "id", "company_id", unique=True),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)

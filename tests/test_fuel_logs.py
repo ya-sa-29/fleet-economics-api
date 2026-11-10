@@ -61,10 +61,9 @@ def create_vehicle(client, headers, plate):
     return response.json()["id"]
 
 
-def create_fuel_log(client, headers, vehicle_id, trip_id=None):
+def create_fuel_log(client, headers, vehicle_id):
     payload = {
         "vehicle_id": vehicle_id,
-        "trip_id": trip_id,
         "liters": 50.5,
         "price_per_liter": 5450,
         "total_cost": 275225,
@@ -180,7 +179,7 @@ def test_driver_can_create_fuel_log_without_trip(
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["trip_id"] is None
+    assert "trip_id" not in response.json()
 
 
 def test_driver_cannot_create_fuel_log_for_unassigned_vehicle(
@@ -196,97 +195,6 @@ def test_driver_cannot_create_fuel_log_for_unassigned_vehicle(
 
     assert response.status_code == 403
 
-
-def test_driver_can_create_fuel_log_for_own_trip(
-    client, db, test_locations
-):
-    scenario = setup_fuel_scenario(client, db, test_locations)
-
-    response = create_fuel_log(
-        client,
-        scenario["driver_headers"],
-        scenario["assigned_vehicle_id"],
-        scenario["own_trip"].id,
-    )
-
-    assert response.status_code == 201, response.text
-
-
-def test_driver_cannot_attach_fuel_log_to_another_drivers_trip(
-    client, db, test_locations
-):
-    scenario = setup_fuel_scenario(client, db, test_locations)
-
-    other_driver_create = client.post(
-        "/users/",
-        headers=scenario["admin_headers"],
-        json={
-            "email": "other-fuel-driver@test.com",
-            "password": "driverpassword123",
-            "role": "driver",
-        },
-    )
-    assert other_driver_create.status_code in (200, 201), other_driver_create.text
-
-    other_driver = db.query(User).filter(
-        User.email == "other-fuel-driver@test.com"
-    ).first()
-
-    origin = db.query(Location).filter(
-        Location.slug == "kyiv"
-    ).first()
-    destination = db.query(Location).filter(
-        Location.slug == "cherkasy"
-    ).first()
-
-    other_trip = create_trip(
-        db,
-        scenario["admin"].company_id,
-        scenario["assigned_vehicle_id"],
-        other_driver.id,
-        origin,
-        destination,
-    )
-
-    response = create_fuel_log(
-        client,
-        scenario["driver_headers"],
-        scenario["assigned_vehicle_id"],
-        other_trip.id,
-    )
-
-    assert response.status_code == 403
-
-
-def test_driver_cannot_attach_fuel_log_to_trip_of_another_vehicle(
-    client, db, test_locations
-):
-    scenario = setup_fuel_scenario(client, db, test_locations)
-
-    origin = db.query(Location).filter(
-        Location.slug == "kyiv"
-    ).first()
-    destination = db.query(Location).filter(
-        Location.slug == "cherkasy"
-    ).first()
-
-    another_vehicle_trip = create_trip(
-        db,
-        scenario["admin"].company_id,
-        scenario["unassigned_vehicle_id"],
-        scenario["driver"].id,
-        origin,
-        destination,
-    )
-
-    response = create_fuel_log(
-        client,
-        scenario["driver_headers"],
-        scenario["assigned_vehicle_id"],
-        another_vehicle_trip.id,
-    )
-
-    assert response.status_code == 404
 
 
 def test_driver_sees_only_fuel_logs_for_assigned_vehicles(

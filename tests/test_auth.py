@@ -1,14 +1,22 @@
+
 from datetime import datetime, timezone
 
-from src.models.user import User, UserRole
-from src.api.auth_utils import get_password_hash
 from jose import jwt
+
+from src.models.user import User, UserRole
+from src.models.company import Company
+from src.api.auth_utils import get_password_hash
 from src.config import settings
+
 
 def test_health_check(client):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "message": "Fleet Economics API is running"}
+    assert response.json() == {
+        "status": "ok",
+        "message": "Fleet Economics API is running",
+    }
+
 
 def test_register_user(client):
     response = client.post(
@@ -16,14 +24,15 @@ def test_register_user(client):
         json={
             "email": "test@transauto.com",
             "password": "securepassword",
-            "company_name": "Test Company"
-        }
+            "company_name": "Test Company",
+        },
     )
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "test@transauto.com"
     assert "id" in data
     assert "company_id" in data
+
 
 def test_login_user(client):
     # Спочатку реєструємо
@@ -32,29 +41,35 @@ def test_login_user(client):
         json={
             "email": "test@transauto.com",
             "password": "securepassword",
-            "company_name": "Test Company"
-        }
+            "company_name": "Test Company",
+        },
     )
     assert register_response.status_code == 201
-    
+
     # Тепер логінимось
     login_response = client.post(
         "/auth/login",
         data={
             "username": "test@transauto.com",
-            "password": "securepassword"
-        }
+            "password": "securepassword",
+        },
     )
     assert login_response.status_code == 200
     data = login_response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
 
+
 def test_login_success(client, db):
+    company = Company(name="Test Company")
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
     user = User(
         email="active@example.com",
         hashed_password=get_password_hash("password123"),
-        company_id=1,
+        company_id=company.id,
         role=UserRole.ADMIN,
     )
     db.add(user)
@@ -74,10 +89,15 @@ def test_login_success(client, db):
 
 
 def test_login_deactivated_user(client, db):
+    company = Company(name="Inactive Test Company")
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
     user = User(
         email="inactive@example.com",
         hashed_password=get_password_hash("password123"),
-        company_id=1,
+        company_id=company.id,
         role=UserRole.ADMIN,
         deleted_at=datetime.now(timezone.utc),
     )
@@ -96,11 +116,17 @@ def test_login_deactivated_user(client, db):
     assert response.json()["detail"] == "Користувач деактивований"
     assert "access_token" not in response.json()
 
+
 def test_deactivated_user_cannot_use_old_token(client, db):
+    company = Company(name="Old Token Test Company")
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
     user = User(
         email="old-token@example.com",
         hashed_password=get_password_hash("password123"),
-        company_id=1,
+        company_id=company.id,
         role=UserRole.ADMIN,
     )
     db.add(user)
@@ -127,11 +153,17 @@ def test_deactivated_user_cannot_use_old_token(client, db):
     assert response.status_code == 403
     assert response.json()["detail"] == "Користувач деактивований"
 
+
 def test_get_my_profile(client, db):
+    company = Company(name="Profile Test Company")
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
     user = User(
         email="profile@example.com",
         hashed_password=get_password_hash("password123"),
-        company_id=1,
+        company_id=company.id,
         role=UserRole.DRIVER,
     )
     db.add(user)
@@ -158,9 +190,10 @@ def test_get_my_profile(client, db):
     data = response.json()
     assert data["id"] == user.id
     assert data["email"] == "profile@example.com"
-    assert data["company_id"] == 1
+    assert data["company_id"] == company.id
     assert data["role"] == "driver"
     assert "hashed_password" not in data
+
 
 def test_get_my_profile_with_invalid_token(client):
     response = client.get(
@@ -170,6 +203,7 @@ def test_get_my_profile_with_invalid_token(client):
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Не вдалося перевірити облікові дані"
+
 
 def test_get_my_profile_with_token_without_sub(client):
     token = jwt.encode(
