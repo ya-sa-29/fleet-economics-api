@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from src.models.user import User, UserRole
-from src.models.trip import Trip, TripStatus
+from src.models.trip import Trip
 from src.models.vehicle import Vehicle
 from src.models.location import Location
 
@@ -70,10 +70,10 @@ def test_driver_sees_only_assigned_vehicles(client, db, test_locations):
         origin_id=origin.id,
         destination_id=destination.id,
         departure_time=datetime.now(timezone.utc),
+        arrival_time=datetime.now(timezone.utc) + timedelta(hours=4),
         distance_km=150,
         ticket_price=25000,
         passengers_carried=5,
-        status=TripStatus.SCHEDULED,
     )
     db.add(trip)
     db.commit()
@@ -287,10 +287,10 @@ def test_driver_can_update_assigned_vehicle_mileage(client, db, test_locations):
         origin_id=origin.id,
         destination_id=destination.id,
         departure_time=datetime.now(timezone.utc),
+        arrival_time=datetime.now(timezone.utc) + timedelta(hours=4),
         distance_km=150,
         ticket_price=25000,
         passengers_carried=5,
-        status=TripStatus.SCHEDULED,
     )
     db.add(trip)
     db.commit()

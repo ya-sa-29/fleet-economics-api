@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from src.api.auth_utils import get_password_hash
 from src.models.location import Location
-from src.models.trip import Trip, TripStatus
+from src.models.trip import Trip
 from src.models.user import User, UserRole
 
 
@@ -86,18 +86,20 @@ def setup_economics_trip(
     db.add_all([origin, destination])
     db.flush()
 
-    # Створюємо рейс із відомими параметрами.
+    # Створюємо завершений рейс із відомими параметрами.
+    departure_time = datetime.now(timezone.utc) - timedelta(hours=5)
+
     trip = Trip(
         company_id=admin.company_id,
         vehicle_id=vehicle_id,
         driver_id=driver.id,
         origin_id=origin.id,
         destination_id=destination.id,
-        departure_time=datetime.now(timezone.utc),
+        departure_time=departure_time,
+        arrival_time=departure_time + timedelta(hours=4),
         distance_km=100,
         ticket_price=50000,
         passengers_carried=10,
-        status=TripStatus.COMPLETED,
     )
     db.add(trip)
     db.commit()
@@ -213,17 +215,19 @@ def test_profit_per_km_http_driver_cannot_access_other_trip(
     db.add(other_driver)
     db.flush()
 
+    departure_time = datetime.now(timezone.utc) - timedelta(hours=5)
+
     other_trip = Trip(
         company_id=original_trip.company_id,
         vehicle_id=original_trip.vehicle_id,
         driver_id=other_driver.id,
         origin_id=original_trip.origin_id,
         destination_id=original_trip.destination_id,
-        departure_time=datetime.now(timezone.utc),
+        departure_time=departure_time,
+        arrival_time=departure_time + timedelta(hours=4),
         distance_km=100,
         ticket_price=50000,
         passengers_carried=10,
-        status=TripStatus.COMPLETED,
     )
     db.add(other_trip)
     db.commit()
@@ -235,6 +239,7 @@ def test_profit_per_km_http_driver_cannot_access_other_trip(
     )
 
     assert response.status_code == 404, response.text
+
 
 def test_vehicle_cpm_http_driver_can_access_assigned_vehicle(
     client: TestClient,
@@ -258,6 +263,7 @@ def test_vehicle_cpm_http_driver_can_access_assigned_vehicle(
 
     assert result["vehicle_id"] == trip.vehicle_id
     assert float(result["total_cpm"]) == 2.4
+
 
 def test_vehicle_cpm_http_driver_cannot_access_unassigned_vehicle(
     client: TestClient,
@@ -293,6 +299,7 @@ def test_vehicle_cpm_http_driver_cannot_access_unassigned_vehicle(
     )
 
     assert response.status_code == 404, response.text
+
 
 def test_vehicle_cpm_http_driver_cannot_access_deleted_assignment(
     client: TestClient,

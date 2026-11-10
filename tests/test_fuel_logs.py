@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
+
+from datetime import datetime, timezone, timedelta
 
 from src.models.user import User
-from src.models.trip import Trip, TripStatus
+from src.models.trip import Trip
 from src.models.location import Location
 
 
@@ -79,17 +80,19 @@ def create_fuel_log(client, headers, vehicle_id, trip_id=None):
 
 
 def create_trip(db, company_id, vehicle_id, driver_id, origin, destination):
+    departure_time = datetime.now(timezone.utc) - timedelta(hours=5)
+
     trip = Trip(
         company_id=company_id,
         vehicle_id=vehicle_id,
         driver_id=driver_id,
         origin_id=origin.id,
         destination_id=destination.id,
-        departure_time=datetime.now(timezone.utc),
+        departure_time=departure_time,
+        arrival_time=departure_time + timedelta(hours=4),
         distance_km=150,
         ticket_price=25000,
         passengers_carried=5,
-        status=TripStatus.SCHEDULED,
     )
     db.add(trip)
     db.commit()
@@ -114,7 +117,7 @@ def setup_fuel_scenario(client, db, test_locations):
         client, admin_headers, "FUEL002"
     )
 
-    # Створюємо водія через API користувачів
+    # Створюємо водія через API користувачів.
     driver_create = client.post(
         "/users/",
         headers=admin_headers,
@@ -126,7 +129,7 @@ def setup_fuel_scenario(client, db, test_locations):
     )
     assert driver_create.status_code in (200, 201), driver_create.text
 
-    # Користувач уже створений, тому лише авторизуємо його
+    # Користувач уже створений, тому лише авторизуємо його.
     driver_headers = login(
         client,
         "fuel-driver@test.com",
@@ -345,7 +348,7 @@ def test_dispatcher_can_create_fuel_log_for_any_company_vehicle(
     )
     assert dispatcher_create.status_code in (200, 201), dispatcher_create.text
 
-    # Диспетчер уже створений через /users/, тому лише авторизуємо його
+    # Диспетчер уже створений через /users/, тому лише авторизуємо його.
     dispatcher_headers = login(
         client,
         "fuel-dispatcher@test.com",

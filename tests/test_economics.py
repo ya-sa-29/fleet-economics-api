@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 
 import pytest
@@ -9,7 +9,7 @@ from src.models.fuel_price import FuelPrice
 from src.models.maintenance_log import MaintenanceLog, MaintenanceType
 from src.models.vehicle import FuelType, Vehicle
 from src.services.economics import EconomicsService
-from src.models.trip import Trip, TripStatus
+from src.models.trip import Trip
 
 def create_vehicle(db, company_id, fuel_type, consumption, plate):
     vehicle = Vehicle(
@@ -33,6 +33,7 @@ def create_vehicle(db, company_id, fuel_type, consumption, plate):
     return vehicle
 
 
+
 def create_trip(
     db,
     company_id,
@@ -43,23 +44,26 @@ def create_trip(
     passengers_carried=4,
     deleted_at=None,
 ):
+    departure_time = datetime(2026, 10, 20, tzinfo=timezone.utc)
+
     trip = Trip(
         company_id=company_id,
         vehicle_id=vehicle_id,
         driver_id=driver_id,
         origin_id=1,
         destination_id=2,
-        departure_time=datetime(2026, 10, 20, tzinfo=timezone.utc),
+        departure_time=departure_time,
+        arrival_time=departure_time + timedelta(hours=4),
         distance_km=distance_km,
         ticket_price=ticket_price,
         passengers_carried=passengers_carried,
-        status=TripStatus.COMPLETED,
         deleted_at=deleted_at,
     )
     db.add(trip)
     db.commit()
     db.refresh(trip)
     return trip
+
 
 
 

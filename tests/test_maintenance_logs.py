@@ -1,8 +1,8 @@
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from src.models.user import User
-from src.models.trip import Trip, TripStatus
+from src.models.trip import Trip
 from src.models.location import Location
 
 
@@ -79,17 +79,19 @@ def create_maintenance_log(client, headers, vehicle_id):
 
 
 def create_trip(db, company_id, vehicle_id, driver_id, origin, destination):
+    departure_time = datetime.now(timezone.utc) - timedelta(hours=5)
+
     trip = Trip(
         company_id=company_id,
         vehicle_id=vehicle_id,
         driver_id=driver_id,
         origin_id=origin.id,
         destination_id=destination.id,
-        departure_time=datetime.now(timezone.utc),
+        departure_time=departure_time,
+        arrival_time=departure_time + timedelta(hours=4),
         distance_km=150,
         ticket_price=25000,
         passengers_carried=5,
-        status=TripStatus.SCHEDULED,
     )
     db.add(trip)
     db.commit()
